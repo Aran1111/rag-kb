@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- namespace 必须指向你的 Mapper 接口全限定名 -->
+<mapper namespace="com.rhs.rag.mapper.DocChunkMapper">
+
+    <!-- 可选：定义结果映射，用于查询时字段与属性的对应 -->
+    <resultMap id="BaseResultMap" type="com.rhs.rag.entity.DocChunk">
+        <id column="id" property="id"/>
+        <result column="doc_id" property="docId"/>
+        <result column="kb_id" property="kbId"/>
+        <result column="doc_version" property="docVersion"/>
+        <result column="chunk_index" property="chunkIndex"/>
+        <result column="content" property="content"/>
+        <result column="embedding" property="embedding"
+                typeHandler="com.rhs.rag.handler.PgVectorTypeHandler"/>
+        <result column="page_num" property="pageNum"/>
+        <result column="section_title" property="sectionTitle"/>
+        <result column="token_count" property="tokenCount"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <!-- 通用列列表，用于查询 -->
+    <sql id="Base_Column_List">
+        id, doc_id, kb_id, doc_version, chunk_index, content, page_num, embedding,
+        section_title, token_count
+    </sql>
+
+    <!-- 批量插入：一条 SQL 插入多行，性能最高 -->
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO kb_doc_chunk
+        (doc_id, kb_id, doc_version, chunk_index, content, embedding, page_num,
+        section_title, token_count)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.docId}, #{item.kbId}, #{item.docVersion}, #{item.chunkIndex},
+            #{item.content},
+            #{item.embedding, typeHandler=com.rhs.rag.handler.PgVectorTypeHandler},
+            #{item.pageNum},
+            #{item.sectionTitle}, #{item.tokenCount})
+        </foreach>
+    </insert>
+    <select id="findByVectorSimilarity" resultMap="BaseResultMap">
+        SELECT
+            id, doc_id, kb_id, doc_version, chunk_index, content,
+            embedding, page_num, section_title, token_count, created_at
+        FROM kb_doc_chunk
+        WHERE kb_id = #{kbId}
+          AND embedding IS NOT NULL
+        ORDER BY embedding &lt;=&gt; CAST(#{embeddingStr} AS vector)
+            LIMIT #{topK}
+    </select>
+    <select id="findByFullTextSearch" resultMap="BaseResultMap">
+        SELECT
+            id, doc_id, kb_id, doc_version, chunk_index, content,
+            embedding, page_num, section_title, token_count, created_at
+        FROM kb_doc_chunk
+        WHERE kb_id = #{kbId}
+          AND to_tsvector('simple', content) @@ to_tsquery('simple', #{tsQuery})
+        ORDER BY ts_rank(
+            to_tsvector('simple', content),
+            to_tsquery('simple', #{tsQuery})
+            ) DESC
+            LIMIT #{topK}
+    </select>
+
+</mapper>

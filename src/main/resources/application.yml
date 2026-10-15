@@ -1,0 +1,164 @@
+spring:
+  profiles:
+    active: dev
+  application:
+    name: rag-kb
+
+# 数据库
+  datasource:
+    url: ${DATABASE_URL}
+    driver-class-name: org.postgresql.Driver
+    username: ${PGSQL_USER}
+    password: ${PGSQL_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+# redis
+  data:
+    redis:
+      database: 0
+      host: ${REDIS_HOST}
+      port: 6379
+      password: ${REDIS_PASSWORD}
+      lettuce:
+        pool:
+          max-active: 16
+          min-idle: 2
+          max-idle: 8
+
+  # 异步任务线程池
+  task:
+    execution:
+      pool:
+        core-size: 4
+        max-size: 8
+        queue-capacity: 100
+      thread-name-prefix: "index-task-"
+
+  # 文件上传限制
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+  # spring AI
+  ai:
+    openai:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode
+      api-key: ${DASHSCOPE_API_KEY}
+      chat:
+        options:
+          temperature: 0.1
+          model: qwen-plus
+          max-tokens: 2048
+      embedding:
+        base-url: https://dashscope.aliyuncs.com/compatible-mode
+        api-key: ${DASHSCOPE_API_KEY}
+        options:
+          model: text-embedding-v3
+
+# MINIO
+minio:
+  endpoint: ${MINIO_ENDPOINT}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRETE_KEY:minioadmin}
+  bucket: rag-documents
+
+
+# reranker 模型
+reranker:
+  endpoint: https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank
+  api-key: ${DASHSCOPE_API_KEY}
+  model: gte-rerank-v2
+  timeout-ms: 800
+  top-n: 5  # 精排后保留top5
+
+# rag参数
+rag:
+  chunk:
+    size: 512             # 每块最大字符数
+    overlap: 64           # 相邻块重叠字符数
+  retrieval:
+    vector-top-k: 20      # 向量检索召回数量
+    full-text-top-k: 20   # 全文检索召回数量
+    return-top-n: 5       # RRF融合后最终返回的chunk数量
+    min-score: 0.5        # 最低相似度阈值，低于的都过滤掉
+  context:
+    maxtoken: 3000        # 传输给模型的最大context token数
+  cache:
+    embedding-ttl: 7d     # embedding缓存有效期
+    query-ttl: 10m        # 查询结果缓存有效期
+
+# sa-token
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 86400          # token有效期
+  is-concurrent: true
+  is-share: false
+  is-read-header: true    # 从header读取token
+
+# SpringDoc OpenAPI 配置
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.rhs.rag.controller
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+
+# 监控
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# 日志
+logging:
+  level:
+    com.rhs.rag: info
+    org.springframework.ai: warn
+  pattern:
+    # 控制台日志格式
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+    # 文件日志格式
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+  file:
+    name: logs/rag-kb.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 30
+      total-size-cap: 1GB
+
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.rhs.ragkb.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id
+      # 若实体里有逻辑删除字段（如 deleted），取消注释
+      # logic-delete-field: deleted
+      # logic-delete-value: 1
+      # logic-not-delete-value: 0
+  type-handlers-package: com.rhs.rag.handler
+
